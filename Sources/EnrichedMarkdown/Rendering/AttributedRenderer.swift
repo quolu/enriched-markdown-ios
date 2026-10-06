@@ -46,8 +46,49 @@ final class AttributedRenderer {
         }
 
         context.clearBlockStyle()
+        if !config.allowTrailingMargin { removeTrailingSpacing(from: output) }
         BaselineShiftRenderer.applyShifts(to: output, config: config)
         SpoilerConcealment.conceal(output, in: NSRange(location: 0, length: output.length))
         return output
+    }
+
+    /// 段落間の余白は残し、文書末尾の段落区切りと余白だけを除く。
+    /// コード枠の内側の下余白は保持し、背景の終端に高さ1ptの区切りを残す。
+    private func removeTrailingSpacing(from output: NSMutableAttributedString) {
+        let lastContent = (output.string as NSString).rangeOfCharacter(
+            from: CharacterSet.newlines.inverted, options: .backwards
+        )
+        guard lastContent.location != NSNotFound else { return }
+        let isCode = output.attribute(MarkdownAttribute.codeBlock, at: lastContent.location, effectiveRange: nil) != nil
+        var codeRange = NSRange()
+        var logicalEnd = NSMaxRange(lastContent)
+        if isCode {
+            _ = output.attribute(MarkdownAttribute.codeBlock, at: lastContent.location,
+                                 longestEffectiveRange: &codeRange, in: NSRange(location: 0, length: output.length))
+            if NSMaxRange(codeRange) == output.length { output.append(ParagraphStyleHelpers.newline) }
+            logicalEnd = NSMaxRange(codeRange) + 1
+        }
+        if logicalEnd < output.length {
+            output.deleteCharacters(in: NSRange(location: logicalEnd, length: output.length - logicalEnd))
+        }
+        if isCode {
+            let tail = NSRange(location: NSMaxRange(codeRange), length: 1)
+            output.removeAttribute(MarkdownAttribute.codeBlock, range: tail)
+            let style = ParagraphStyleHelpers.getOrCreateParagraphStyle(in: output, at: tail.location)
+            style.paragraphSpacing = 0
+            style.paragraphSpacingBefore = 0
+            style.minimumLineHeight = 1
+            style.maximumLineHeight = 1
+            output.addAttribute(.paragraphStyle, value: style, range: tail)
+        } else {
+            var range = NSRange()
+            if let style = output.attribute(.paragraphStyle, at: lastContent.location,
+                                            effectiveRange: &range) as? NSParagraphStyle,
+               let finalStyle = style.mutableCopy() as? NSMutableParagraphStyle {
+                finalStyle.paragraphSpacing = 0
+                output.addAttribute(.paragraphStyle, value: finalStyle,
+                                    range: NSIntersectionRange(range, NSRange(location: 0, length: output.length)))
+            }
+        }
     }
 }

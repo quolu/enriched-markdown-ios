@@ -63,7 +63,8 @@ let package = Package(
         .testTarget(
             name: "EnrichedMarkdownTests",
             dependencies: ["EnrichedMarkdown"],
-            path: "Tests/EnrichedMarkdownTests"
+            path: "Tests/EnrichedMarkdownTests",
+            resources: [.copy("Resources/Fonts")]
         ),
         .testTarget(
             name: "EnrichedMarkdownLaTeXTests",

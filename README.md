@@ -559,3 +559,22 @@ yarn workspace @enriched-markdown/ios clean
 These scripts run `swift build` / `swift test` / `swift package clean` from the package root.
 
 In the monorepo, `core/md4c` and `core/parser` are symlinks into the shared C++ sources at `packages/core/cpp`. When syncing this folder to the standalone repository, dereference them so real files are copied (e.g. `rsync -a --copy-links`).
+
+## このforkの末尾余白の指定
+
+`MarkdownStyleConfig.allowTrailingMargin`は既定で`true`とし、従来の表示を保持する。会話の吹き出しなどで`false`を渡すと、文書の最終ブロックに追加した段落区切りと外余白を省く。段落の途中の間隔、元のMarkdown、コード枠の内側の余白は保つ。
+
+SwiftUIではテーマの公開インターフェースから指定できる。
+
+```swift
+struct CompactDocument: MarkdownThemeContent {
+    func apply(to config: inout MarkdownStyleConfig, traitCollection: UITraitCollection) {
+        config.allowTrailingMargin = false
+    }
+}
+
+EnrichedMarkdownText(source)
+    .markdownTheme { CompactDocument() }
+```
+
+処理は同じプロジェクトの[React Native版の最終ブロックの処理](https://github.com/software-mansion/enriched-markdown/blob/main/packages/react-native-enriched-markdown/ios/renderer/AttributedRenderer.m)に合わせ、Swift版のTextKit描画で確認した。字体の試験は、[公式サンプルのMontserrat](https://github.com/software-mansion/enriched-markdown/tree/main/apps/ios-example/EnrichedMarkdownExample/EnrichedMarkdownExample/Resources/Fonts)を試験バンドルから読む。字体のデータは変更せず、OFLの著作権表示とライセンスを同梱する。

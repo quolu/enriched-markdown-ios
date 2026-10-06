@@ -5,6 +5,31 @@ import XCTest
 @testable import EnrichedMarkdown
 
 final class RendererTests: XCTestCase {
+    func testFinalParagraphDoesNotAddAnEmptyLineOrMargin() {
+        var style = MarkdownStyleConfig.baseline()
+        style.allowTrailingMargin = false
+        style.paragraph.marginBottom = 16
+        let result = MarkdownRenderer.render("最初の段落。\n\n最後の段落。", config: style)
+        XCTAssertEqual(result.string, "最初の段落。\n最後の段落。")
+        let first = result.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+        let last = result.attribute(.paragraphStyle, at: result.length - 1, effectiveRange: nil) as? NSParagraphStyle
+        XCTAssertEqual(first?.paragraphSpacing, 16)
+        XCTAssertEqual(last?.paragraphSpacing, 0)
+    }
+
+    func testFinalCodeBlockKeepsPaddingAndAOnePointTerminator() {
+        var style = MarkdownStyleConfig.baseline()
+        style.allowTrailingMargin = false
+        style.codeBlock.padding = 12
+        style.codeBlock.marginBottom = 16
+        let result = MarkdownRenderer.render("```swift\nlet value = 1\n```", config: style)
+        XCTAssertTrue(result.string.contains("let value = 1"))
+        let tail = result.attribute(.paragraphStyle, at: result.length - 1, effectiveRange: nil) as? NSParagraphStyle
+        XCTAssertEqual(tail?.minimumLineHeight, 1)
+        XCTAssertEqual(tail?.maximumLineHeight, 1)
+        XCTAssertNil(result.attribute(MarkdownAttribute.codeBlock, at: result.length - 1, effectiveRange: nil))
+    }
+
     private var config: MarkdownStyleConfig!
 
     override func setUp() {
@@ -88,21 +113,15 @@ final class RendererTests: XCTestCase {
 
     private static func registerMontserratFontsIfNeeded() {
         guard !registeredMontserratFonts else { return }
-        registeredMontserratFonts = true
-
-        let repoRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let fontsDir = repoRoot
-            .appendingPathComponent("apps/ios-example/EnrichedMarkdownExample/EnrichedMarkdownExample/Resources/Fonts")
-
+        // 独立したSwift packageの試験バンドルから、公式サンプルと同じ字体を読む。
         for name in ["Montserrat-Regular", "Montserrat-Bold", "Montserrat-Italic", "Montserrat-BoldItalic"] {
-            let url = fontsDir.appendingPathComponent("\(name).ttf")
-            CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+            guard let url = Bundle.module.url(forResource: name, withExtension: "ttf", subdirectory: "Fonts") else {
+                XCTFail("試験用字体がありません: \(name)")
+                return
+            }
+            XCTAssertTrue(CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil), "試験用字体を登録できません: \(name)")
         }
+        registeredMontserratFonts = true
     }
 
     func testBoldAndItalicCombinedInCustomFontListItem() {

@@ -460,6 +460,8 @@ public struct TableStyle: Equatable, Sendable {
 }
 
 public struct MarkdownStyleConfig: Equatable, Sendable {
+    /// 既存の表示は保持し、会話の吹き出しなどは文書末尾の外余白を明示的に省ける。
+    public var allowTrailingMargin = true
     public var paragraph: ElementStyle
     public var heading1: ElementStyle
     public var heading2: ElementStyle
