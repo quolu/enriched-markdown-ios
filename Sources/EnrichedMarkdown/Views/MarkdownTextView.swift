@@ -10,14 +10,11 @@ protocol SelectionHandleTouchReporting {
 final class MarkdownTextView: UITextView, SelectionHandleTouchReporting {
     var styleConfig: MarkdownStyleConfig = .baseline() {
         didSet {
+            guard styleConfig != oldValue else { return }
             updateDecorationStyleConfig()
-            // `updateUIView` assigns this on every pass, so only a real change
-            // may drop the measurement — clearing it unconditionally would
-            // re-measure the document every frame, which is the whole point.
-            if styleConfig != oldValue {
-                cachedFit = nil
-                spoilerOverlays.style = styleConfig.spoiler
-            }
+            // updateUIViewは毎回代入する。値が変わった時だけ計測を破棄する。
+            cachedFit = nil
+            spoilerOverlays.style = styleConfig.spoiler
         }
     }
 
@@ -37,6 +34,9 @@ final class MarkdownTextView: UITextView, SelectionHandleTouchReporting {
     /// Measuring lays out the whole document, and SwiftUI asks for it on every
     /// update pass — and again through `intrinsicContentSize`.
     private var cachedFit: CachedFit?
+
+    private var lastDecorationBounds: CGRect?
+    private var lastDecorationContentOffset: CGPoint?
 
     /// Mirrored from the representable so VoiceOver link elements can invoke
     /// the press handler via accessibilityActivate.
@@ -334,7 +334,11 @@ final class MarkdownTextView: UITextView, SelectionHandleTouchReporting {
     override func layoutSubviews() {
         super.layoutSubviews()
         layoutDecorationView()
-        setDecorationNeedsDisplay()
+        if lastDecorationBounds != bounds || lastDecorationContentOffset != contentOffset {
+            lastDecorationBounds = bounds
+            lastDecorationContentOffset = contentOffset
+            setDecorationNeedsDisplay()
+        }
         spoilerOverlays.update()
     }
 }

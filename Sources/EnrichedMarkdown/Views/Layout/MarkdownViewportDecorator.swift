@@ -84,24 +84,12 @@ final class MarkdownViewportDecorator {
         textLayoutManager: NSTextLayoutManager,
         contentManager: NSTextContentManager
     ) -> NSRange {
-        var range = NSRange(location: 0, length: 0)
-        textLayoutManager.enumerateTextLayoutFragments(
-            from: textLayoutManager.documentRange.location,
-            options: []
-        ) { fragment in
-            guard let fragmentRange = TextLayoutHelpers.nsRange(fragment.rangeInElement, in: contentManager) else {
-                return true
-            }
-            if range.length == 0 {
-                range = fragmentRange
-            } else {
-                let end = max(NSMaxRange(range), NSMaxRange(fragmentRange))
-                range = NSRange(
-                    location: min(range.location, fragmentRange.location),
-                    length: end - min(range.location, fragmentRange.location)
-                )
-            }
-            return true
+        guard let viewportRange = textLayoutManager.textViewportLayoutController.viewportRange,
+              let range = TextLayoutHelpers.nsRange(viewportRange, in: contentManager) else {
+            // 初回やスクロールしない表示ではTextKit 2の表示範囲が未確定のことがある。
+            // その時は文書全体を描き、初回からブロックの装飾を表示する。
+            return TextLayoutHelpers.nsRange(contentManager.documentRange, in: contentManager)
+                ?? NSRange(location: 0, length: 0)
         }
         return range
     }

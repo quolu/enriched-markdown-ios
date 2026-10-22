@@ -2,13 +2,31 @@ import UIKit
 
 enum CodeBlockBackgroundDrawer {
     static func draw(in drawContext: BlockDrawContext) {
-        drawContext.textStorage.enumerateAttribute(
+        let textStorage = drawContext.textStorage
+        let documentRange = NSRange(location: 0, length: textStorage.length)
+        let visibleRange = NSIntersectionRange(drawContext.visibleCharacterRange, documentRange)
+        guard visibleRange.length > 0 else { return }
+
+        var drawnBlocks = Set<Range<Int>>()
+        textStorage.enumerateAttribute(
             MarkdownAttribute.codeBlock,
-            in: NSRange(location: 0, length: drawContext.textStorage.length),
+            in: visibleRange,
             options: []
-        ) { value, range, _ in
-            guard value != nil, TextLayoutHelpers.rangesIntersect(range, drawContext.visibleCharacterRange) else { return }
-            drawCodeBlockBackground(for: range, in: drawContext)
+        ) { value, visibleAttributeRange, _ in
+            guard value != nil, visibleAttributeRange.length > 0 else { return }
+
+            // 列挙範囲は表示領域で切られるため、属性の全範囲を復元して
+            // コード枠の上下の角丸を元の位置に保つ。
+            var blockRange = NSRange()
+            _ = textStorage.attribute(
+                MarkdownAttribute.codeBlock,
+                at: visibleAttributeRange.location,
+                longestEffectiveRange: &blockRange,
+                in: documentRange
+            )
+            let blockKey = blockRange.location..<NSMaxRange(blockRange)
+            guard blockRange.length > 0, drawnBlocks.insert(blockKey).inserted else { return }
+            drawCodeBlockBackground(for: blockRange, in: drawContext)
         }
     }
 
