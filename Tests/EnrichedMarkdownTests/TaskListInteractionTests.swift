@@ -223,11 +223,12 @@ final class TaskListInteractionTests: XCTestCase {
 
     @MainActor
     private func renderSynchronously(_ store: MarkdownRenderStore, markdown: String) {
-        store.schedule(markdown: markdown, config: config)
         let rendered = expectation(description: "render applied for \(markdown)")
         let cancellable = store.$source
             .dropFirst()
             .sink { _ in rendered.fulfill() }
+        // A cached document applies synchronously, so subscribe first.
+        store.schedule(markdown: markdown, config: config)
         wait(for: [rendered], timeout: 2)
         cancellable.cancel()
     }

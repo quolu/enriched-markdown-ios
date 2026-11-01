@@ -57,19 +57,36 @@ final class MarkdownRenderStore: ObservableObject {
         // render adjusts the flags itself; the source keeps the adjusted ones for copying.
         let effectiveFlags = MarkdownRenderer.effectiveFlags(flags, plugins: plugins)
 
+        let apply: (NSAttributedString) -> Void = { [weak self] result in
+            guard let self else { return }
+            attributedText = SpoilerInteraction.revealing(in: result, ordinals: revealedSpoilers) ?? result
+            source = RenderedSource(markdown: resolved, flags: effectiveFlags)
+        }
+        // Plugins and request headers are not part of the cache key.
+        let cacheable = imageRequestHeaders.isEmpty && plugins.isEmpty
+        if cacheable, let cached = MarkdownRenderCache.shared.text(for: resolved, config: config, flags: flags) {
+            coordinator.invalidate()
+            apply(cached)
+            return
+        }
         coordinator.scheduleRender {
-            MarkdownRenderer.render(
+            let result = MarkdownRenderer.render(
                 resolved,
                 config: config,
                 flags: flags,
                 imageRequestHeaders: imageRequestHeaders,
                 plugins: plugins
             )
-        } apply: { [weak self] result in
-            guard let self else { return }
-            attributedText = SpoilerInteraction.revealing(in: result, ordinals: revealedSpoilers) ?? result
-            source = RenderedSource(markdown: resolved, flags: effectiveFlags)
+            if cacheable { MarkdownRenderCache.shared.store(result, for: resolved, config: config, flags: flags) }
+            return result
+        } apply: { result in
+            apply(result)
         }
+    }
+
+    /// Whether this store already owns `markdown`, rendered or in flight.
+    func holds(_ markdown: String) -> Bool {
+        baseMarkdown == markdown
     }
 
     /// Shows the concealed spoiler covering `range` in place.

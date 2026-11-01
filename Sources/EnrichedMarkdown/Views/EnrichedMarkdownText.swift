@@ -1,6 +1,13 @@
 import SwiftUI
 import UIKit
 
+private let prerenderQueue = DispatchQueue(label: "com.swmansion.enriched.markdown.prerender", qos: .userInitiated)
+
+private struct RenderedDocument {
+    let text: NSAttributedString
+    let source: RenderedSource
+}
+
 public struct EnrichedMarkdownText: View {
     private let markdown: String
     private let flags: Md4cFlags
@@ -27,6 +34,20 @@ public struct EnrichedMarkdownText: View {
     }
 
     private var styleConfig: MarkdownStyleConfig {
+        Self.styleConfig(
+            themeLayers: themeLayers,
+            plugins: renderPlugins,
+            colorScheme: colorScheme,
+            dynamicTypeSize: dynamicTypeSize
+        )
+    }
+
+    private static func styleConfig(
+        themeLayers: [MarkdownTheme],
+        plugins: [any MarkdownRenderPlugin],
+        colorScheme: ColorScheme,
+        dynamicTypeSize: DynamicTypeSize
+    ) -> MarkdownStyleConfig {
         let traitCollection = ThemeResolver.traitCollection(
             colorScheme: colorScheme,
             dynamicTypeSize: dynamicTypeSize
@@ -34,17 +55,58 @@ public struct EnrichedMarkdownText: View {
         // Plugin defaults go above `MarkdownTheme.default` (the environment's
         // first layer) and below the app's themes.
         var layers = themeLayers
-        layers.insert(contentsOf: renderPlugins.compactMap(\.defaultTheme), at: min(1, layers.count))
+        layers.insert(contentsOf: plugins.compactMap(\.defaultTheme), at: min(1, layers.count))
         return MarkdownStyleConfig.resolve(layers: layers, traitCollection: traitCollection)
+    }
+
+    /// Renders `markdowns` off the main thread, so a view created later with
+    /// the same document shows it on its first layout, at its final height.
+    /// Pass the environment the views will inherit, and the theme they add with
+    /// `markdownTheme`. Documents already rendered are skipped. A theme color
+    /// left on `tintColor` resolves by the ambient view, so it can differ here
+    /// and miss the cache: set it explicitly in `theme`.
+    @MainActor
+    public static func prerender(
+        _ markdowns: [String],
+        flags: Md4cFlags = .commonMark,
+        theme: MarkdownTheme,
+        environment: EnvironmentValues
+    ) async {
+        // Same limit as `MarkdownRenderStore.schedule`: these are not in the cache key.
+        guard environment.markdownImageRequestHeaders.isEmpty, environment.markdownRenderPlugins.isEmpty else { return }
+        let config = styleConfig(
+            themeLayers: environment.markdownThemeLayers + [theme],
+            plugins: [],
+            colorScheme: environment.colorScheme,
+            dynamicTypeSize: environment.dynamicTypeSize
+        )
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            prerenderQueue.async {
+                for markdown in markdowns
+                where MarkdownRenderCache.shared.text(for: markdown, config: config, flags: flags) == nil {
+                    let text = MarkdownRenderer.render(markdown, config: config, flags: flags)
+                    MarkdownRenderCache.shared.store(text, for: markdown, config: config, flags: flags)
+                }
+                continuation.resume()
+            }
+        }
+    }
+
+    private func prerendered(config: MarkdownStyleConfig) -> RenderedDocument? {
+        guard !renderStore.holds(markdown), imageRequestHeaders.isEmpty, renderPlugins.isEmpty else { return nil }
+        return MarkdownRenderCache.shared.text(for: markdown, config: config, flags: flags).map {
+            RenderedDocument(text: $0, source: RenderedSource(markdown: markdown, flags: flags))
+        }
     }
 
     public var body: some View {
         // Resolved once: `styleConfig` rebuilds the whole config on each read,
         // and the representable and every `onChange` below read it.
         let config = styleConfig
+        let prerendered = prerendered(config: config)
         return MarkdownTextViewRepresentable(
-            attributedText: renderStore.attributedText,
-            source: renderStore.source,
+            attributedText: prerendered?.text ?? renderStore.attributedText,
+            source: prerendered?.source ?? renderStore.source,
             styleConfig: config,
             onLinkPress: onLinkPress,
             onLinkLongPress: onLinkLongPress,
