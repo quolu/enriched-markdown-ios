@@ -24,6 +24,23 @@ final class ParserTests: XCTestCase {
         XCTAssertEqual(text?.content, "Hello world")
     }
 
+    func testTableRightAfterAParagraphLineStartsATable() {
+        // GFM: a table may interrupt a paragraph; the paragraph keeps its earlier lines.
+        let ast = parser.parseMarkdown("**要点**\n| 行 | 中身 |\n|---|---|\n| 1 | a |")
+
+        XCTAssertEqual(ast.children.map(\.type), [.paragraph, .table])
+        XCTAssertEqual(ast.child(ofType: .paragraph)?.first(ofType: .strong)?.child(ofType: .text)?.content, "要点")
+        let table = ast.child(ofType: .table)
+        XCTAssertEqual(table?.all(ofType: .tableHeaderCell).count, 2)
+        XCTAssertEqual(table?.all(ofType: .tableCell).count, 2)
+    }
+
+    func testDelimiterRowAfterAPipelessParagraphLineIsNotATable() {
+        let ast = parser.parseMarkdown("first line\nsecond line\n|---|---|")
+
+        XCTAssertNil(ast.first(ofType: .table))
+    }
+
     func testParsesStrongAndEmphasis() {
         let ast = parser.parseMarkdown("**bold** and *italic*")
 

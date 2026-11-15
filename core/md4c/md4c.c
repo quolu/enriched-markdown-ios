@@ -6047,6 +6047,20 @@ md_is_setext_underline(MD_CTX* ctx, OFF beg, OFF* p_end, unsigned* p_level)
 }
 
 static int
+md_last_line_has_pipe(MD_CTX* ctx)
+{
+    const MD_LINE* lines = (const MD_LINE*) (ctx->current_block + 1);
+    const MD_LINE* last = &lines[ctx->current_block->n_lines - 1];
+    OFF off;
+
+    for(off = last->beg; off < last->end; off++) {
+        if(CH(off) == _T('|'))
+            return 1;
+    }
+    return 0;
+}
+
+static int
 md_is_table_underline(MD_CTX* ctx, OFF beg, OFF* p_end, unsigned* p_col_count)
 {
     OFF off = beg;
@@ -6936,7 +6950,10 @@ md_analyze_line(MD_CTX* ctx, OFF beg, OFF* p_end,
         {
             unsigned col_count;
 
-            if(ctx->current_block != NULL  &&  ctx->current_block->n_lines == 1  &&
+            /* GFM: a table may interrupt a paragraph; its last line becomes the header row.
+             * Beyond the first line, only a last line holding a pipe can be a header. */
+            if(ctx->current_block != NULL  &&  ctx->current_block->n_lines >= 1  &&
+                (ctx->current_block->n_lines == 1  ||  md_last_line_has_pipe(ctx))  &&
                 md_is_table_underline(ctx, off, &off, &col_count))
             {
                 line->data = col_count;
@@ -7129,6 +7146,20 @@ md_process_line(MD_CTX* ctx, const MD_LINE_ANALYSIS** p_pivot_line, MD_LINE_ANAL
     /* MD_LINE_TABLEUNDERLINE changes meaning of the current block. */
     if(line->type == MD_LINE_TABLEUNDERLINE) {
         MD_ASSERT(ctx->current_block != NULL);
+        if(ctx->current_block->n_lines > 1) {
+            /* Split the paragraph: its last line moves into a new block which becomes the table. */
+            MD_LINE* lines = (MD_LINE*) (ctx->current_block + 1);
+            MD_LINE_ANALYSIS header = *(const MD_LINE_ANALYSIS*) pivot_line;
+
+            header.beg = lines[ctx->current_block->n_lines - 1].beg;
+            header.end = lines[ctx->current_block->n_lines - 1].end;
+            header.type = MD_LINE_TEXT;
+            ctx->current_block->n_lines--;
+            ctx->n_block_bytes -= sizeof(MD_LINE);
+            MD_CHECK(md_end_current_block(ctx));
+            MD_CHECK(md_start_new_block(ctx, &header));
+            MD_CHECK(md_add_line_into_current_block(ctx, &header));
+        }
         MD_ASSERT(ctx->current_block->n_lines == 1);
         ctx->current_block->type = MD_BLOCK_TABLE;
         ctx->current_block->data = line->data;
