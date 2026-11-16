@@ -295,6 +295,30 @@ final class MarkdownTextView: UITextView, SelectionHandleTouchReporting {
         setNeedsLayout()
     }
 
+    private var appliedHighlightToken: Int?
+
+    /// Draws rounded marks behind the first match of `highlight.text` and fades them out after about two seconds.
+    /// Each token acts once; no match draws nothing. The text itself is not touched.
+    func showHighlight(_ highlight: MarkdownHighlight?) {
+        guard let highlight, highlight.token != appliedHighlightToken else { return }
+        appliedHighlightToken = highlight.token
+        guard let shown = attributedText?.string, let range = highlight.range(in: shown) else { return }
+        var marks: [UIView] = []
+        TextLayoutHelpers.enumerateSegmentFrames(of: range, in: self) { frame, _ in
+            let mark = UIView(frame: frame.insetBy(dx: -2, dy: -1))
+            mark.backgroundColor = tintColor.withAlphaComponent(0.28)
+            mark.layer.cornerRadius = 4
+            mark.isUserInteractionEnabled = false
+            insertSubview(mark, at: 0)
+            marks.append(mark)
+        }
+        UIView.animate(withDuration: 0.5, delay: 1.6, options: .curveEaseOut) {
+            marks.forEach { $0.alpha = 0 }
+        } completion: { _ in
+            marks.forEach { $0.removeFromSuperview() }
+        }
+    }
+
     override func sizeThatFits(_ size: CGSize) -> CGSize {
         if let cachedFit, cachedFit.width == size.width, cachedFit.text === renderedText {
             return CGSize(width: size.width, height: cachedFit.height)

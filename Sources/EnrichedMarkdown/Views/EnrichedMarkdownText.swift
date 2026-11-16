@@ -26,6 +26,7 @@ public struct EnrichedMarkdownText: View {
     @Environment(\.markdownTaskListItemToggleEnabled) private var isTaskListToggleEnabled
     @Environment(\.markdownSpoilerOverlay) private var spoilerOverlay
     @Environment(\.markdownAccessibilityLabels) private var accessibilityLabels
+    @Environment(\.markdownHighlight) private var highlight
     @StateObject private var renderStore = MarkdownRenderStore()
 
     public init(_ markdown: String, flags: Md4cFlags = .commonMark) {
@@ -124,7 +125,8 @@ public struct EnrichedMarkdownText: View {
             onSpoilerTap: { range in
                 renderStore.revealSpoiler(in: range)
             },
-            accessibilityLabels: accessibilityLabels
+            accessibilityLabels: accessibilityLabels,
+            highlight: highlight
         )
         .fixedSize(horizontal: false, vertical: true)
         .onAppear {

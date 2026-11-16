@@ -222,3 +222,20 @@ final class SelectionMenuItemsTests: XCTestCase {
         XCTAssertTrue((result[1] as? UIMenu)?.identifier == .lookup)
     }
 }
+
+final class MarkdownHighlightTests: XCTestCase {
+    func testFindsFirstOccurrenceAtOrAfterTheHintThenFallsBack() {
+        let shown = "はい。はい。いいえ"
+        let highlight = MarkdownHighlight(text: "はい", fromUTF16: 1, token: 1)
+        XCTAssertEqual(highlight.range(in: shown), NSRange(location: 3, length: 2))
+        XCTAssertEqual(MarkdownHighlight(text: "はい", fromUTF16: 9, token: 1).range(in: shown), NSRange(location: 0, length: 2))
+        XCTAssertNil(MarkdownHighlight(text: "ない", token: 1).range(in: shown))
+        XCTAssertNil(MarkdownHighlight(text: "", token: 1).range(in: shown))
+    }
+
+    func testCustomActionsDoNotChangeConfigEquality() {
+        let a = MarkdownSelectionMenuConfig(customActions: [.init(title: "引用", systemImageName: "quote.bubble") { _ in }])
+        let b = MarkdownSelectionMenuConfig(customActions: [.init(title: "引用", systemImageName: "quote.bubble") { _ in }])
+        XCTAssertEqual(a, b)
+    }
+}

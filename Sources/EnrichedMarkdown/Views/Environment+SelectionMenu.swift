@@ -1,19 +1,41 @@
 import SwiftUI
 
+/// An app-defined item of the text-selection edit menu. `handler` receives the selected text as shown (plain text).
+public struct MarkdownSelectionMenuAction: Equatable, Sendable {
+    public var title: String
+    public var systemImageName: String
+    public var handler: @MainActor (String) -> Void
+
+    public init(title: String, systemImageName: String, handler: @escaping @MainActor (String) -> Void) {
+        self.title = title
+        self.systemImageName = systemImageName
+        self.handler = handler
+    }
+
+    // The handler is not compared: a new closure each update must not count as a change.
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.title == rhs.title && lhs.systemImageName == rhs.systemImageName
+    }
+}
+
 /// Configuration for the custom items added to the text-selection edit menu.
 public struct MarkdownSelectionMenuConfig: Equatable, Sendable {
     public var copyAsMarkdown: Bool
     public var copyImageUrl: Bool
     public var copyAsMarkdownLabel: String
+    /// Extra items shown for a non-empty selection, after the built-in ones.
+    public var customActions: [MarkdownSelectionMenuAction]
 
     public init(
         copyAsMarkdown: Bool = true,
         copyImageUrl: Bool = true,
-        copyAsMarkdownLabel: String = "Copy as Markdown"
+        copyAsMarkdownLabel: String = "Copy as Markdown",
+        customActions: [MarkdownSelectionMenuAction] = []
     ) {
         self.copyAsMarkdown = copyAsMarkdown
         self.copyImageUrl = copyImageUrl
         self.copyAsMarkdownLabel = copyAsMarkdownLabel
+        self.customActions = customActions
     }
 }
 

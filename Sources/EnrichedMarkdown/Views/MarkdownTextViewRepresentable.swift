@@ -14,6 +14,7 @@ struct MarkdownTextViewRepresentable: UIViewRepresentable {
     let spoilerOverlay: any SpoilerOverlayProvider
     let onSpoilerTap: ((NSRange) -> Void)?
     let accessibilityLabels: MarkdownAccessibilityLabels
+    let highlight: MarkdownHighlight?
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -40,6 +41,7 @@ struct MarkdownTextViewRepresentable: UIViewRepresentable {
         textView.onSpoilerTap = onSpoilerTap
         textView.accessibilityLabels = accessibilityLabels
         textView.setMarkdownAttributedText(attributedText)
+        textView.showHighlight(highlight)
     }
 
     static func dismantleUIView(_ uiView: MarkdownTextView, coordinator: Coordinator) {
@@ -146,6 +148,14 @@ struct MarkdownTextViewRepresentable: UIViewRepresentable {
                 source: source
             )
             var actions = specs.map(Self.makeAction(for:))
+            if range.length > 0, let shown = textView.attributedText {
+                let selected = MarkdownTextView.plainText(of: shown, in: range)
+                actions += selectionMenuConfig.customActions.map { custom in
+                    UIAction(title: custom.title, image: UIImage(systemName: custom.systemImageName)) { _ in
+                        custom.handler(selected)
+                    }
+                }
+            }
 
             // Recent iOS versions stop suggesting Select All for non-editable text
             // views, leaving no way to grow a long-press selection to the whole
